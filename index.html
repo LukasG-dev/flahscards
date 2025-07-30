@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flashcard Creator</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Flashcard Creator</h1>
+
+      <div class="input-section">
+        <textarea
+          id="frontText"
+          placeholder="Enter front side text..."
+        ></textarea>
+        <textarea
+          id="backText"
+          placeholder="Enter back side text..."
+        ></textarea>
+        <button id="addCardBtn">Add Card</button>
+      </div>
+
+      <div id="flashcardsContainer" class="flashcards-container"></div>
+
+      <button id="darkModeToggle">Toggle Dark Mode</button>
+
+      <button id="downloadPdfBtn">Download PDF</button>
+    </div>
+
+    <script src="./node_modules/jspdf/dist/jspdf.umd.min.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
