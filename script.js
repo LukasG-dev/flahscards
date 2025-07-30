@@ -1,6 +1,9 @@
 // 1. Select elements from the HTML
 const frontTextInput = document.getElementById("frontText");
 const backTextInput = document.getElementById("backText");
+const frontTitleInput = document.getElementById("frontTitle");
+const backTitleInput = document.getElementById("backTitle");
+
 const addCardBtn = document.getElementById("addCardBtn");
 const flashcardsContainer = document.getElementById("flashcardsContainer");
 const downloadPdfBtn = document.getElementById("downloadPdfBtn");
@@ -12,7 +15,6 @@ let flashcards = [];
 // Function to toggle dark mode
 function toggleDarkMode() {
   document.body.classList.toggle("dark-mode");
-  // Save current mode preference to localStorage
   if (document.body.classList.contains("dark-mode")) {
     localStorage.setItem("darkMode", "enabled");
   } else {
@@ -32,22 +34,30 @@ function applySavedDarkMode() {
 function addFlashcard() {
   const frontText = frontTextInput.value.trim();
   const backText = backTextInput.value.trim();
+  const frontTitle = frontTitleInput.value.trim();
+  const backTitle = backTitleInput.value.trim();
 
-  // Check if both fields are filled
   if (frontText === "" || backText === "") {
     alert("Please enter text for both the front and back of the card.");
     return;
   }
 
-  const newCard = { front: frontText, back: backText };
+  const newCard = {
+    frontTitle: frontTitle,
+    front: frontText,
+    backTitle: backTitle,
+    back: backText,
+  };
   flashcards.push(newCard);
   saveFlashcards();
   renderFlashcards();
 
   // Clear input fields
+  frontTitleInput.value = "";
+  backTitleInput.value = "";
   frontTextInput.value = "";
   backTextInput.value = "";
-  frontTextInput.focus();
+  frontTitleInput.focus();
 }
 
 // 3. Function to save cards to localStorage
@@ -72,9 +82,28 @@ function renderFlashcards() {
     const cardElement = document.createElement("div");
     cardElement.classList.add("flashcard");
 
+    // Nummerierungs-Anzeige im Browser
+    const numberSpan = document.createElement("span");
+    numberSpan.classList.add("card-number");
+    numberSpan.textContent = `Card ${index + 1}`;
+
+    // Titel der Vorderseite anzeigen
+    const frontTitleParagraph = document.createElement("p");
+    frontTitleParagraph.classList.add("card-title", "front-title");
+    frontTitleParagraph.textContent = card.frontTitle
+      ? `Front Title: ${card.frontTitle}`
+      : "";
+
     const frontParagraph = document.createElement("p");
     frontParagraph.classList.add("card-front");
     frontParagraph.textContent = card.front;
+
+    // Titel der Rückseite anzeigen
+    const backTitleParagraph = document.createElement("p");
+    backTitleParagraph.classList.add("card-title", "back-title");
+    backTitleParagraph.textContent = card.backTitle
+      ? `Back Title: ${card.backTitle}`
+      : "";
 
     const backParagraph = document.createElement("p");
     backParagraph.classList.add("card-back");
@@ -85,7 +114,10 @@ function renderFlashcards() {
     deleteButton.classList.add("delete-card-btn");
     deleteButton.onclick = () => deleteFlashcard(index);
 
+    cardElement.appendChild(numberSpan);
+    cardElement.appendChild(frontTitleParagraph);
     cardElement.appendChild(frontParagraph);
+    cardElement.appendChild(backTitleParagraph);
     cardElement.appendChild(backParagraph);
     cardElement.appendChild(deleteButton);
 
@@ -112,21 +144,18 @@ function waitForJsPDF() {
     const intervalTime = 100; // Check every 100ms
 
     const checkJsPDF = () => {
-      // Check if window.jspdf exists and if it contains the expected jsPDF object
       if (window.jspdf && typeof window.jspdf.jsPDF !== "undefined") {
-        resolve(window.jspdf); // Found, resolve the Promise successfully
+        resolve(window.jspdf);
       } else if (attempts < maxAttempts) {
         attempts++;
-        setTimeout(checkJsPDF, intervalTime); // Keep checking
+        setTimeout(checkJsPDF, intervalTime);
       } else {
-        // Timeout, reject the Promise with an error
         reject(
           new Error("jsPDF library did not load within the expected time.")
         );
       }
     };
-
-    checkJsPDF(); // Start the first check
+    checkJsPDF();
   });
 }
 
@@ -136,7 +165,6 @@ async function generatePdf() {
 
   let jsPDFModule;
   try {
-    // Here we wait until jsPDF is truly available
     jsPDFModule = await waitForJsPDF();
     console.log("DEBUG: jsPDF library successfully loaded and available.");
   } catch (error) {
@@ -148,59 +176,151 @@ async function generatePdf() {
     return;
   }
 
-  // If execution reaches here, jsPDFModule is definitely defined and contains the loaded object
   const { jsPDF } = jsPDFModule;
 
-  // ***************************************************************
-  // Set A4 page to PORTRAIT (vertical)
-  // ***************************************************************
   const doc = new jsPDF({
-    orientation: "portrait", // A4 now in portrait mode
+    orientation: "portrait",
     unit: "mm",
     format: "a4",
   });
 
-  // ***************************************************************
-  // Calculations for A4 Portrait and two A5 Landscape cards, one below the other
-  // ***************************************************************
-  const a4Width = doc.internal.pageSize.getWidth(); // 210 mm for A4 Portrait
-  const a4Height = doc.internal.pageSize.getHeight(); // 297 mm for A4 Portrait
+  const a4Width = doc.internal.pageSize.getWidth();
+  const a4Height = doc.internal.pageSize.getHeight();
 
-  // A5 Landscape dimensions: ~210mm (width) x ~148.5mm (height)
-  // Each card should take the full width of the A4 sheet (210mm).
-  // Each card should take half the height of the A4 sheet (148.5mm).
+  // Jede Karteikarte nimmt die halbe A4-Höhe und die volle A4-Breite ein
   const cardPrintWidth = a4Width;
   const cardPrintHeight = a4Height / 2;
 
-  const margin = 10; // Margin around the text within the card
+  const margin = 10; // Allgemeiner Rand für Inhalte innerhalb des Kartenbereichs
+  const titleFontSize = 14; // Schriftgröße für Titel
+  const numberFontSize = 10; // Schriftgröße für Nummerierung
+  const baseContentFontSize = 20; // Basis-Schriftgröße für den Hauptinhalt
 
   /**
-   * Helper function to draw text within a defined area on the PDF page,
-   * handling text wrapping and centering.
-   * @param {string} text - The text to be drawn.
-   * @param {number} x - The X-coordinate of the starting point of the area.
-   * @param {number} y - The Y-coordinate of the starting point of the area.
-   * @param {number} width - The width of the text area.
-   * @param {number} height - The height of the text area.
+   * Helper function to draw content (main text, title, number) within a card area on the PDF.
+   * Includes logic to resize font for long texts or truncate if necessary.
+   * @param {string} mainText - The main content text to be drawn.
+   * @param {string} cardTitle - The title specific to this side of the card (frontTitle or backTitle).
+   * @param {number} overallCardNumber - The overall number of the card (e.g., 1, 2, 3...).
+   * @param {number} sideNumber - The side number (1 for front, 2 for back).
+   * @param {number} x - The X-coordinate of the starting point of the card area.
+   * @param {number} y - The Y-coordinate of the starting point of the card area.
+   * @param {number} width - The width of the card area.
+   * @param {number} height - The height of the card area.
    */
-  const drawCardText = (text, x, y, width, height) => {
-    doc.setFontSize(20); // Font size for card text
-    doc.setTextColor(0, 0, 0); // Black text color
+  const drawCardContent = (
+    mainText,
+    cardTitle,
+    overallCardNumber,
+    sideNumber,
+    x,
+    y,
+    width,
+    height
+  ) => {
+    let currentY = y + margin; // Startpunkt für die erste Zeile (Nummerierung)
 
-    // Wrap text to fit within the card width (minus margins)
-    const lines = doc.splitTextToSize(text, width - 2 * margin);
-    const lineHeight = doc.getLineHeight() / doc.internal.scaleFactor;
+    // Nummerierung zeichnen
+    doc.setFontSize(numberFontSize);
+    doc.setTextColor(100, 100, 100); // Etwas helleres Grau für die Nummerierung
+    doc.setFont("helvetica", "normal"); // Sicherstellen, dass die Nummerierung nicht fett ist
+    doc.text(
+      `Card ${overallCardNumber} - Side ${sideNumber}`,
+      x + margin,
+      currentY + numberFontSize / 2,
+      { align: "left" }
+    );
+    currentY += numberFontSize + 2; // Abstand nach der Nummer
 
-    // Calculate vertical position to center text within the card area
-    const textHeight = lines.length * lineHeight;
-    const textY = y + height / 2 - textHeight / 2; // Vertically centered
+    // Titel zeichnen (falls vorhanden)
+    if (cardTitle) {
+      doc.setFontSize(titleFontSize);
+      doc.setTextColor(50, 50, 50); // Dunkelgrau für den Titel
+      doc.setFont("helvetica", "bold"); // Titel fett machen!
 
-    doc.text(lines, x + margin, textY, { align: "center" }); // Horizontally centered within the margin
+      const titleLines = doc.splitTextToSize(cardTitle, width - 2 * margin);
+      const titleLineHeight = doc.getLineHeight() / doc.internal.scaleFactor;
+      doc.text(titleLines, x + width / 2, currentY + titleLineHeight / 2, {
+        align: "center",
+      });
+      currentY += titleLines.length * titleLineHeight + 5; // Abstand nach dem Titel
+    }
+
+    // WICHTIG: Schriftart für den Haupttext wieder auf 'normal' setzen!
+    // Sonst wäre auch der Haupttext fett, wenn ein Titel vorhanden war.
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 0, 0); // Schwarze Textfarbe für Hauptinhalt
+
+    // Haupttext zeichnen
+    // Berechne den verbleibenden Platz für den Haupttext
+    const contentWidth = width - 2 * margin;
+    const maxContentHeight = y + height - currentY - margin; // Von der aktuellen Y-Position bis zum unteren Rand der Karte
+
+    let currentContentFontSize = baseContentFontSize; // Starte mit der Standard-Schriftgröße
+    let lines = [];
+    let textHeight = 0;
+
+    // Versuche, die Schriftgröße zu reduzieren, bis der Text passt
+    while (currentContentFontSize >= 8) {
+      // Kleinste erlaubte Schriftgröße
+      doc.setFontSize(currentContentFontSize);
+      lines = doc.splitTextToSize(mainText, contentWidth);
+      const lineHeight = doc.getLineHeight() / doc.internal.scaleFactor;
+      textHeight = lines.length * lineHeight;
+
+      if (textHeight <= maxContentHeight) {
+        // Text passt, breche Schleife ab
+        break;
+      }
+      currentContentFontSize -= 1; // Schriftgröße um 1 Punkt reduzieren
+    }
+
+    // Wenn der Text immer noch nicht passt, abschneiden
+    if (textHeight > maxContentHeight) {
+      console.warn(
+        `Text for Card ${overallCardNumber} Side ${sideNumber} is too long (${textHeight.toFixed(
+          2
+        )}mm > ${maxContentHeight.toFixed(
+          2
+        )}mm) even with smallest font size. Truncating.`
+      );
+      const lineHeight = doc.getLineHeight() / doc.internal.scaleFactor;
+      const maxLines = Math.floor(maxContentHeight / lineHeight);
+      if (maxLines > 0) {
+        lines = lines.slice(0, maxLines);
+        // Füge "..." zur letzten Zeile hinzu, wenn abgeschnitten wurde
+        if (
+          lines.length > 0 &&
+          lines.length < doc.splitTextToSize(mainText, contentWidth).length
+        ) {
+          lines[lines.length - 1] =
+            lines[lines.length - 1].substring(
+              0,
+              lines[lines.length - 1].length - 3
+            ) + "...";
+        }
+      } else {
+        lines = ["..."]; // Wenn gar nichts passt, nur Ellipsen
+      }
+      textHeight = lines.length * lineHeight; // Aktualisierte Höhe nach dem Abschneiden
+    }
+
+    // Vertikale Position für Textzentrierung innerhalb des verbleibenden Inhaltsbereichs
+    // (oder um ihn am oberen Rand zu beginnen, wenn er sehr lang ist)
+    let textY = currentY + maxContentHeight / 2 - textHeight / 2;
+    // Sicherstellen, dass der Text nicht über den oberen Rand des Haupttextbereichs ragt
+    if (textY < currentY) {
+      textY = currentY;
+    }
+
+    doc.text(lines, x + width / 2, textY, { align: "center" }); // Text an der Mitte der Karte zentrieren
     console.log(
-      `DEBUG: Text drawn: "${text.substring(
+      `DEBUG: Content drawn: "${mainText.substring(
         0,
-        Math.min(text.length, 30)
-      )}" at x:${x}, y:${y}`
+        Math.min(mainText.length, 30)
+      )}" (Font: ${currentContentFontSize}pt) for Card ${overallCardNumber} Side ${sideNumber} at x:${
+        x + width / 2
+      }, y:${textY}`
     );
   };
 
@@ -211,42 +331,42 @@ async function generatePdf() {
     return;
   }
 
-  // Iterate through flashcards, generating pages for front and back sides
-  // Two cards per A4 page (one pair)
+  // Schleife zum Erstellen der PDF-Seiten
   for (let i = 0; i < flashcards.length; i += 2) {
     console.log(`DEBUG: Creating pages for card pair ${Math.floor(i / 2) + 1}`);
 
-    // --- Front Sides Page (A4 Portrait) ---
-    doc.addPage(); // Adds a new page for the front sides
-    doc.setDrawColor(0); // Black color for borders
-    doc.setLineWidth(0.2); // Thin border line
+    // --- Vorderseiten-Seite (A4 Hochformat) ---
+    doc.addPage();
+    doc.setDrawColor(0); // Schwarze Rahmenfarbe
+    doc.setLineWidth(0.2); // Rahmendicke
 
-    // Card 1 Front (Top A5 Landscape position)
-    const card1Front = flashcards[i];
-    if (card1Front) {
-      console.log(
-        `DEBUG: Drawing front of card ${i + 1}: ${card1Front.front.substring(
-          0,
-          Math.min(card1Front.front.length, 20)
-        )}...`
+    const card1 = flashcards[i];
+    if (card1) {
+      const overallCardNumber1 = i + 1; // Gesamtkartennummer (beginnt bei 1)
+      // Zeichne Vorderseite der ersten Karte (obere Hälfte der A4-Seite)
+      doc.rect(0, 0, cardPrintWidth, cardPrintHeight);
+      drawCardContent(
+        card1.front,
+        card1.frontTitle,
+        overallCardNumber1,
+        1,
+        0,
+        0,
+        cardPrintWidth,
+        cardPrintHeight
       );
-      // doc.rect(x, y, width, height) to draw the card frame
-      doc.rect(0, 0, cardPrintWidth, cardPrintHeight); // Top half of the A4 page
-      drawCardText(card1Front.front, 0, 0, cardPrintWidth, cardPrintHeight);
     }
 
-    // Card 2 Front (Bottom A5 Landscape position)
-    const card2Front = flashcards[i + 1];
-    if (card2Front) {
-      console.log(
-        `DEBUG: Drawing front of card ${i + 2}: ${card2Front.front.substring(
-          0,
-          Math.min(card2Front.front.length, 20)
-        )}...`
-      );
-      doc.rect(0, cardPrintHeight, cardPrintWidth, cardPrintHeight); // Bottom half of the A4 page
-      drawCardText(
-        card2Front.front,
+    const card2 = flashcards[i + 1];
+    if (card2) {
+      const overallCardNumber2 = i + 2; // Gesamtkartennummer
+      // Zeichne Vorderseite der zweiten Karte (untere Hälfte der A4-Seite)
+      doc.rect(0, cardPrintHeight, cardPrintWidth, cardPrintHeight);
+      drawCardContent(
+        card2.front,
+        card2.frontTitle,
+        overallCardNumber2,
+        1,
         0,
         cardPrintHeight,
         cardPrintWidth,
@@ -254,35 +374,36 @@ async function generatePdf() {
       );
     }
 
-    // --- Back Sides Page (A4 Portrait) ---
-    // This page is created after the front sides page to allow for double-sided printing.
+    // --- Rückseiten-Seite (A4 Hochformat) ---
     doc.addPage();
-    doc.setDrawColor(0);
-    doc.setLineWidth(0.2);
+    doc.setDrawColor(0); // Schwarze Rahmenfarbe
+    doc.setLineWidth(0.2); // Rahmendicke
 
-    // Card 1 Back (Top A5 Landscape position, corresponds to Card 1 Front)
-    if (card1Front) {
-      console.log(
-        `DEBUG: Drawing back of card ${i + 1}: ${card1Front.back.substring(
-          0,
-          Math.min(card1Front.back.length, 20)
-        )}...`
-      );
+    if (card1) {
+      const overallCardNumber1 = i + 1;
+      // Zeichne Rückseite der ersten Karte (obere Hälfte der A4-Seite)
       doc.rect(0, 0, cardPrintWidth, cardPrintHeight);
-      drawCardText(card1Front.back, 0, 0, cardPrintWidth, cardPrintHeight);
+      drawCardContent(
+        card1.back,
+        card1.backTitle,
+        overallCardNumber1,
+        2,
+        0,
+        0,
+        cardPrintWidth,
+        cardPrintHeight
+      );
     }
 
-    // Card 2 Back (Bottom A5 Landscape position, corresponds to Card 2 Front)
-    if (card2Front) {
-      console.log(
-        `DEBUG: Drawing back of card ${i + 2}: ${card2Front.back.substring(
-          0,
-          Math.min(card2Front.back.length, 20)
-        )}...`
-      );
+    if (card2) {
+      const overallCardNumber2 = i + 2;
+      // Zeichne Rückseite der zweiten Karte (untere Hälfte der A4-Seite)
       doc.rect(0, cardPrintHeight, cardPrintWidth, cardPrintHeight);
-      drawCardText(
-        card2Front.back,
+      drawCardContent(
+        card2.back,
+        card2.backTitle,
+        overallCardNumber2,
+        2,
         0,
         cardPrintHeight,
         cardPrintWidth,
@@ -291,18 +412,16 @@ async function generatePdf() {
     }
   }
 
-  // Remove the very first blank page added by default by jsPDF.
-  // This is only necessary if there were cards to generate.
+  // Die erste leere Seite löschen, die jsPDF standardmäßig erstellt
   if (flashcards.length > 0) {
     console.log("DEBUG: Deleting first blank page.");
     doc.deletePage(1);
   } else {
-    // This case should be caught by the earlier check, but it's an additional safeguard
-    alert("No flashcards to generate PDF for. Please add some cards first.");
     console.warn("DEBUG: No flashcards found, PDF generation aborted.");
     return;
   }
 
+  // PDF speichern
   doc.save("flashcards.pdf");
   console.log("PDF generation successful with jsPDF!");
 }

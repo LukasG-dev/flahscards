@@ -11,10 +11,20 @@
       <h1>Flashcard Creator</h1>
 
       <div class="input-section">
+        <input
+          type="text"
+          id="frontTitle"
+          placeholder="Enter front side title (optional)..."
+        />
         <textarea
           id="frontText"
           placeholder="Enter front side text..."
         ></textarea>
+        <input
+          type="text"
+          id="backTitle"
+          placeholder="Enter back side title (optional)..."
+        />
         <textarea
           id="backText"
           placeholder="Enter back side text..."
@@ -29,7 +39,7 @@
       <button id="downloadPdfBtn">Download PDF</button>
     </div>
 
-    <script src="./node_modules/jspdf/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="script.js"></script>
   </body>
 </html>
